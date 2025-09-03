@@ -22,6 +22,9 @@ async def send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Usage: /movie <name>")
         return
+# Show how many movies are stored
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"📂 Movies stored: {len(MOVIES)}")
 
     query = " ".join(context.args).lower()
     found = False
@@ -52,6 +55,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("movie", send_movie))
+    app.add_handler(CommandHandler("stats", stats))   # ✅ new command registered
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, save_from_channel))
 
     app.run_polling()
