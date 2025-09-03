@@ -66,20 +66,20 @@ async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "\n".join([f"{i+1}. {cap}" for i, cap in enumerate(sample)])
     await update.message.reply_text(f"📂 Found {len(matches)} matches:\n\n{text}")
 
-    query = " ".join(context.args).lower()
-    found = False
+    # query = " ".join(context.args).lower()
+    # found = False
 
-    for caption, msg_id in MOVIES.items():
-        if query in caption:   # ✅ simple substring match
-            await context.bot.forward_message(
-                chat_id=update.message.chat_id,
-                from_chat_id=CHANNEL_ID,
-                message_id=msg_id
-            )
-            found = True
+    # for caption, msg_id in MOVIES.items():
+    #     if query in caption:   # ✅ simple substring match
+    #         await context.bot.forward_message(
+    #             chat_id=update.message.chat_id,
+    #             from_chat_id=CHANNEL_ID,
+    #             message_id=msg_id
+    #         )
+    #         found = True
 
-    if not found:
-        await update.message.reply_text("No matches yet. Try another keyword.")
+    # if not found:
+    #     await update.message.reply_text("No matches yet. Try another keyword.")
 
 # Auto-save when new movie posted in channel
 async def save_from_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
