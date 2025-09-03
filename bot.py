@@ -79,6 +79,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("movie", send_movie))
     app.add_handler(CommandHandler("stats", stats))   # ✅ new command registered
+    app.add_handler(CommandHandler("list", list_movies))
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, save_from_channel))
 
     app.run_polling()
