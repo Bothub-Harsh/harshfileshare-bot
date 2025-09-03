@@ -64,7 +64,7 @@ async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # limit for safety
     sample = matches[:600000]
-    text = "\n".join([f"{i+1}. {cap}" for i, cap in enumerate(sample)])
+    text = "\n\n".join([f"{i+1}. {cap}" for i, cap in enumerate(sample)])
     await update.message.reply_text(f"📂 Found {len(matches)} matches:\n\n{text}")
 
     # query = " ".join(context.args).lower()
