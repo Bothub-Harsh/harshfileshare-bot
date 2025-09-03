@@ -25,6 +25,29 @@ async def send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Show how many movies are stored
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"📂 Movies stored: {len(MOVIES)}")
+    
+# Show sample of saved captions
+async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not MOVIES:
+        await update.message.reply_text("⚠️ No movies saved yet.")
+        return
+
+    # If user gives a keyword → filter results
+    if context.args:
+        keyword = " ".join(context.args).lower()
+        matches = [cap for cap in MOVIES.keys() if keyword in cap]
+    else:
+        matches = list(MOVIES.keys())
+
+    if not matches:
+        await update.message.reply_text(f"❌ No captions found with that keyword.")
+        return
+
+    # Limit to first 20 for safety
+    sample = matches[:20]
+    text = "\n\n".join(sample)
+
+    await update.message.reply_text(f"🎬 Saved captions ({len(matches)} matches):\n\n{text}")
 
     query = " ".join(context.args).lower()
     found = False
