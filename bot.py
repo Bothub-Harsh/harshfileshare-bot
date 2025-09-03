@@ -7,7 +7,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 DB_FILE = "movies.json"
 
-# Load database
+# Load saved database
 if os.path.exists(DB_FILE):
     with open(DB_FILE, "r") as f:
         MOVIES = json.load(f)
@@ -15,7 +15,7 @@ else:
     MOVIES = {}   # {caption: message_id}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /movie <name> to get a movie!")
+    await update.message.reply_text("Send /movie <name + year> to get a movie!")
 
 async def send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -28,10 +28,10 @@ async def send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No movies saved yet!")
         return
 
-    # Search best match using fuzzy matching
+    # Use fuzzy search to find the best caption match
     best_match, score, _ = process.extractOne(query, MOVIES.keys())
 
-    if score > 60:  # 60% similarity threshold
+    if score > 50:  # allow loose matches
         message_id = MOVIES[best_match]
         await context.bot.forward_message(
             chat_id=update.message.chat_id,
@@ -41,7 +41,7 @@ async def send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ Movie not found. Try with correct name + year.")
 
-# Save new movies when posted in channel
+# Auto-save new channel posts
 async def save_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.channel_post:
         msg = update.channel_post
@@ -49,6 +49,7 @@ async def save_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption = msg.caption.lower().strip()
             MOVIES[caption] = msg.message_id
 
+            # Save updated DB
             with open(DB_FILE, "w") as f:
                 json.dump(MOVIES, f)
 
@@ -59,6 +60,8 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("movie", send_movie))
+
+    # Listen to channel posts
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, save_movie))
 
     app.run_polling()
