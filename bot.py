@@ -63,19 +63,12 @@ async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Auto-save when new movie posted in channel
 async def save_from_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.caption:
-        caption = update.message.caption.lower()
-
-        # check if it's a video or document
-        file_id = None
-        if update.message.video:
-            file_id = update.message.video.file_id
-        elif update.message.document:
-            file_id = update.message.document.file_id
-
-        if file_id:
-            MOVIES[caption] = file_id  # ✅ store only caption + file_id
-            print(f"Saved: {caption}")
+    if update.channel_post and update.channel_post.caption:
+        caption = update.channel_post.caption.lower().strip()
+        MOVIES[caption] = update.channel_post.message_id
+        with open(DB_FILE, "w") as f:
+            json.dump(MOVIES, f)
+        print(f"✅ Saved from channel: {caption}")
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
