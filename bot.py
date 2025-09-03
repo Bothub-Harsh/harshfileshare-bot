@@ -1,68 +1,58 @@
 import os, json
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from rapidfuzz import process
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN")   # put in Railway env
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 DB_FILE = "movies.json"
 
-# Load saved database
+# Load DB
 if os.path.exists(DB_FILE):
     with open(DB_FILE, "r") as f:
         MOVIES = json.load(f)
 else:
     MOVIES = {}   # {caption: message_id}
 
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /movie <name + year> to get a movie!")
+    await update.message.reply_text("🎬 Send /movie <name> to get movies!")
 
+# /movie command
 async def send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Usage: /movie <movie name + year>")
+        await update.message.reply_text("Usage: /movie <name>")
         return
 
     query = " ".join(context.args).lower()
+    found = False
 
-    if not MOVIES:
-        await update.message.reply_text("No movies saved yet!")
-        return
+    for caption, msg_id in MOVIES.items():
+        if query in caption:   # ✅ simple substring match
+            await context.bot.forward_message(
+                chat_id=update.message.chat_id,
+                from_chat_id=CHANNEL_ID,
+                message_id=msg_id
+            )
+            found = True
 
-    # Use fuzzy search to find the best caption match
-    best_match, score, _ = process.extractOne(query, MOVIES.keys())
+    if not found:
+        await update.message.reply_text("No matches yet. Try another keyword.")
 
-    if score > 50:  # allow loose matches
-        message_id = MOVIES[best_match]
-        await context.bot.forward_message(
-            chat_id=update.message.chat_id,
-            from_chat_id=CHANNEL_ID,
-            message_id=message_id
-        )
-    else:
-        await update.message.reply_text("❌ Movie not found. Try with correct name + year.")
-
-# Auto-save new channel posts
-async def save_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.channel_post:
-        msg = update.channel_post
-        if msg.caption:
-            caption = msg.caption.lower().strip()
-            MOVIES[caption] = msg.message_id
-
-            # Save updated DB
-            with open(DB_FILE, "w") as f:
-                json.dump(MOVIES, f)
-
-            print(f"Saved: {caption} -> {msg.message_id}")
+# Auto-save when new movie posted in channel
+async def save_from_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.channel_post and update.channel_post.caption:
+        caption = update.channel_post.caption.lower().strip()
+        MOVIES[caption] = update.channel_post.message_id
+        with open(DB_FILE, "w") as f:
+            json.dump(MOVIES, f)
+        print(f"✅ Saved from channel: {caption}")
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("movie", send_movie))
-
-    # Listen to channel posts
-    app.add_handler(MessageHandler(filters.ChatType.CHANNEL, save_movie))
+    app.add_handler(MessageHandler(filters.ChatType.CHANNEL, save_from_channel))
 
     app.run_polling()
 
