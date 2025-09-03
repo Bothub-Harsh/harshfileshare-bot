@@ -32,7 +32,6 @@ async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ No movies saved yet.")
         return
 
-    # Keyword filter
     if context.args:
         keyword = " ".join(context.args).lower()
         matches = [cap for cap in MOVIES.keys() if keyword in cap]
@@ -43,24 +42,9 @@ async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ No captions found with that keyword.")
         return
 
-    # Sort results alphabetically
-    matches = sorted(matches)
-
-    # Limit to 50 results (avoid spam in chat)
-    limit = 50
-    sample = matches[:limit]
-
-    # Number each caption
-    text = "\n\n".join([f"{i+1}. {cap}" for i, cap in enumerate(sample)])
-
-    # If there are more matches, show how many are hidden
-    extra = ""
-    if len(matches) > limit:
-        extra = f"\n\n⚠️ Showing first {limit} of {len(matches)} results."
-
-    await update.message.reply_text(
-        f"🎬 Found {len(matches)} matches:\n\n{text}{extra}"
-    )
+    sample = matches[:20]
+    text = "\n".join([f"{i+1}. {cap}" for i, cap in enumerate(sample)])
+    await update.message.reply_text(f"📂 Found {len(matches)} matches:\n\n{text}")
 
     query = " ".join(context.args).lower()
     found = False
