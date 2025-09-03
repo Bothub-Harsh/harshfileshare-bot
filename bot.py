@@ -17,16 +17,35 @@ else:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🎬 Send /movie <name> to get movies!")
 
-# /movie command
+# /movie command → forward movie(s)
 async def send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Usage: /movie <name>")
         return
+
+    query = " ".join(context.args).lower()
+    found = False
+
+    for caption, file_id in MOVIES.items():
+        if query in caption:   # ✅ simple substring match
+            try:
+                # Forward the file from file_id
+                await context.bot.send_document(
+                    chat_id=update.message.chat_id,
+                    document=file_id,
+                    caption=caption
+                )
+                found = True
+            except Exception as e:
+                print(f"Error sending {caption}: {e}")
+
+    if not found:
+        await update.message.reply_text("❌ No matches found. Try another keyword.")
 # Show how many movies are stored
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"📂 Movies stored: {len(MOVIES)}")
     
-# Show saved captions with optional keyword search
+# /list command → only list captions
 async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not MOVIES:
         await update.message.reply_text("⚠️ No movies saved yet.")
@@ -42,6 +61,7 @@ async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ No captions found with that keyword.")
         return
 
+    # limit for safety
     sample = matches[:20]
     text = "\n".join([f"{i+1}. {cap}" for i, cap in enumerate(sample)])
     await update.message.reply_text(f"📂 Found {len(matches)} matches:\n\n{text}")
