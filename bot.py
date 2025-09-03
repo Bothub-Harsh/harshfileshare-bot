@@ -26,21 +26,22 @@ async def send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = " ".join(context.args).lower()
     found = False
 
-    for caption, file_id in MOVIES.items():
-        if query in caption:   # ✅ simple substring match
+    for caption, msg_id in MOVIES.items():
+        if query in caption:   # ✅ substring match
             try:
-                # Forward the file from file_id
-                await context.bot.send_document(
+                # Forward from channel using saved message_id
+                await context.bot.forward_message(
                     chat_id=update.message.chat_id,
-                    document=file_id,
-                    caption=caption
+                    from_chat_id=CHANNEL_ID,
+                    message_id=msg_id
                 )
                 found = True
             except Exception as e:
-                print(f"Error sending {caption}: {e}")
+                print(f"Error forwarding {caption}: {e}")
 
     if not found:
         await update.message.reply_text("❌ No matches found. Try another keyword.")
+
 # Show how many movies are stored
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"📂 Movies stored: {len(MOVIES)}")
@@ -62,7 +63,7 @@ async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # limit for safety
-    sample = matches[:20]
+    sample = matches[:600000]
     text = "\n".join([f"{i+1}. {cap}" for i, cap in enumerate(sample)])
     await update.message.reply_text(f"📂 Found {len(matches)} matches:\n\n{text}")
 
