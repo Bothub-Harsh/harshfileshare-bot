@@ -1,128 +1,95 @@
-import os
-import sqlite3
-import logging
+import os, sqlite3
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from telegram.error import Forbidden, BadRequest
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")       # Railway env
-CHANNEL_ID = int(os.getenv("CHANNEL_ID"))  # Source channel
-DB_FILE = "movies.db"
+BOT_TOKEN = os.getenv("BOT_TOKEN")   # put in Railway env
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+SQLITE_DB = "movies.db"  # your SQLite DB
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# 🔹 1. Initialize DB
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS movies (
-            caption TEXT PRIMARY KEY,
-            message_id INTEGER
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-# 🔹 2. Save movie into DB
-def save_movie(caption, message_id):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT OR REPLACE INTO movies (caption, message_id) VALUES (?, ?)", 
-                       (caption, message_id))
-        conn.commit()
-    except Exception as e:
-        logger.error(f"DB Error: {e}")
-    finally:
-        conn.close()
-
-# 🔹 3. Search movies
-def search_movies(keyword):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT caption, message_id FROM movies WHERE caption LIKE ?", (f"%{keyword}%",))
-    results = cursor.fetchall()
-    conn.close()
-    return results
-
-# 🔹 4. Count movies
-def count_movies():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM movies")
-    count = cursor.fetchone()[0]
-    conn.close()
-    return count
-
-# ---------------- Bot Handlers ----------------
-
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🎬 Send /movie <name> to get movies!")
 
-# /movie command → forward requested movie(s)
+# /movie command → forward movie(s) from SQLite DB
 async def send_movie(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Usage: /movie <name>")
         return
 
     query = " ".join(context.args).lower()
-    results = search_movies(query)
 
-    if not results:
-        await update.message.reply_text("❌ No matches found. Try another keyword.")
-        return
+    # Connect to SQLite DB
+    conn = sqlite3.connect(SQLITE_DB)
+    cursor = conn.cursor()
 
-    for caption, msg_id in results[:10]:  # limit forwarding to 10 results
-        try:
-            await context.bot.forward_message(
-                chat_id=update.message.chat_id,
-                from_chat_id=CHANNEL_ID,
-                message_id=msg_id
-            )
-        except (Forbidden, BadRequest) as e:
-            logger.error(f"Error forwarding {caption}: {e}")
+    # Search captions (case-insensitive)
+    cursor.execute("SELECT caption, message_id FROM movies WHERE LOWER(caption) LIKE ?", ('%'+query+'%',))
+    results = cursor.fetchall()
+    conn.close()
 
-# /stats command → show how many stored
+    if results:
+        found = False
+        for caption, msg_id in results:
+            try:
+                await context.bot.forward_message(
+                    chat_id=update.message.chat_id,
+                    from_chat_id=CHANNEL_ID,
+                    message_id=msg_id
+                )
+                found = True
+            except Exception as e:
+                print(f"Error forwarding '{caption}': {e}")
+
+        if not found:
+            await update.message.reply_text("❌ Found in DB, but could not forward messages.")
+    else:
+        await update.message.reply_text("❌ No matches found in the database.")
+
+# Show how many movies are stored
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    total = count_movies()
-    await update.message.reply_text(f"📂 Movies stored: {total}")
+    # Optional: count rows in DB
+    conn = sqlite3.connect(SQLITE_DB)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM movies")
+    count = cursor.fetchone()[0]
+    conn.close()
+    await update.message.reply_text(f"📂 Movies stored: {count}")
 
-# /list command → list captions (with optional keyword filter)
+# /list command → only list captions
 async def list_movies(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    conn = sqlite3.connect(SQLITE_DB)
+    cursor = conn.cursor()
     if context.args:
         keyword = " ".join(context.args).lower()
-        matches = search_movies(keyword)
+        cursor.execute("SELECT caption FROM movies WHERE LOWER(caption) LIKE ?", ('%'+keyword+'%',))
     else:
-        matches = search_movies("")  # all movies
+        cursor.execute("SELECT caption FROM movies")
+    matches = [row[0] for row in cursor.fetchall()]
+    conn.close()
 
     if not matches:
-        await update.message.reply_text("❌ No captions found.")
+        await update.message.reply_text("❌ No captions found with that keyword.")
         return
 
-    MAX_CHARS = 4000
-    text = ""
-    for i, (cap, _) in enumerate(matches, start=1):
-        line = f"{i}. {cap}\n"
-        if len(text) + len(line) > MAX_CHARS:
-            break
-        text += line
-
+    # limit for safety
+    sample = matches[:600000]
+    text = "\n".join([f"{i+1}. {cap}" for i, cap in enumerate(sample)])
     await update.message.reply_text(f"📂 Found {len(matches)} matches:\n\n{text}")
 
-# Auto-save when new movie posted in channel
+# Optional: auto-save from channel (you can implement DB insert here if needed)
 async def save_from_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.channel_post and update.channel_post.caption:
         caption = update.channel_post.caption.lower().strip()
-        save_movie(caption, update.channel_post.message_id)
-        logger.info(f"✅ Saved from channel: {caption}")
+        message_id = update.channel_post.message_id
+        # Save to DB
+        conn = sqlite3.connect(SQLITE_DB)
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR IGNORE INTO movies (caption, message_id) VALUES (?, ?)", (caption, message_id))
+        conn.commit()
+        conn.close()
+        print(f"✅ Saved from channel: {caption}")
 
-# ---------------- Main ----------------
 def main():
-    init_db()  # make sure DB exists
-
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
